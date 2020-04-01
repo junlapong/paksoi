@@ -12,6 +12,11 @@ export const stations = [
   { position: { lat: 13.499483, lng: 99.940575 }, title: 'Bamboo The Coffee Parlour' },
   { position: { lat: 13.515153, lng: 99.951543 }, title: 'ร้านข้าวมันไก่ไหหลำ เจ๊ยอง' },
   { position: { lat: 13.517824, lng: 99.953683 }, title: 'ก๋วยเตี๋ยวหมูน้ำแดง' },
+  { position: { lat: 13.541078, lng: 99.964172 }, title: 'idyll coffee' },
+  { position: { lat: 13.539581, lng: 99.965501 }, title: 'Tree Shade' },
+  { position: { lat: 13.558011, lng: 99.968313 }, title: 'Take A Break' },
+  { position: { lat: 13.489862, lng: 99.973928 }, title: 'ภพรักกาแฟ' },
+
   { position: { lat: 13.921234, lng: 100.667261 }, title: 'ก๋วยเตี๋ยวอาเล็ก เมืองทอง' },
   { position: { lat: 13.921252, lng: 100.667160 }, title: 'ตำมั่ว ครัวร้อยเอ็ด' }
 ];
