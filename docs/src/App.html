@@ -1,0 +1,78 @@
+<div class="sm:flex border border-grey border-solid">
+<!-- 
+  <div ref:background class="sm:w-64">
+    <img class="p-3 mt-4" src="public/pulse-logo-dark.png" alt="GRTC Pulse">
+  </div>
+ -->
+  <div ref:container class="w-full border-b border-grey border-solid">
+    <Map :map defer bind:center bind:zoom>
+      {{#each stations as station}}
+        <Marker :map position={{station.position}} title={{station.title}} :icon on:click="set({ selected: station })" />
+      {{/each}}
+
+      <Polyline :map path={{route}} color="#005da5" weight="4" />
+
+      {{#if selected}}  
+        <Info :map position={{selected.position}} on:close="set({ selected: null })">
+          <div class="text-sm font-medium whitespace-no-wrap">{{selected.title}}</div>
+        </Info>
+      {{/if}}
+    </Map>
+  </div>
+</div>
+
+<div class="my-4 text-grey-darker text-sm sm:text-right">
+  <div class="sm:inline-block">Latitude: {{center.lat.toFixed(6)}}</div>
+  <span class="invisible sm:visible">&mdash;</span>
+  <div class="sm:inline-block">Longitude: {{center.lng.toFixed(6)}}</div>
+  <span class="invisible sm:visible">&mdash;</span>
+  <div class="sm:inline-block">
+    <label for="zoom">Zoom</label>:
+    <input type="range" min="1" max="18" bind:value="zoom" class="align-text-top" /> {{zoom}}
+  </div>
+</div>
+
+<style>
+  ref:container {
+    height: 600px;
+  }
+
+  ref:background {
+    background-color: #005da5;
+  }
+</style>
+
+<script>
+  import { Context } from 'svelte-google-maps';
+  import Map from 'svelte-google-maps/Map.html';
+  import Marker from 'svelte-google-maps/Marker.html';
+  import Polyline from 'svelte-google-maps/Polyline.html';
+  import Info from 'svelte-google-maps/Info.html';
+  import { center, stations, route } from './data';
+
+  const API_KEY = process.env.API_KEY;
+  const icon = {
+    path: 'M 0,0 m -2,0 a 2,2 0 2,0 4,0 a 2,2 0 2,0 -4,0',
+    fillColor: '#ff3d00',
+    fillOpacity: 1,
+    scale: 3,
+    strokeColor: '#ff3d00',
+    strokeWeight: 2.5
+  };
+
+  export default {
+    components: { Map, Marker, Polyline, Info },
+
+    data() {
+      return {
+        map: new Context(API_KEY, { beta: true }),
+        center,
+        zoom: 14,
+        stations,
+        route,
+        icon,
+        selected: null
+      };
+    }
+  }
+</script>
