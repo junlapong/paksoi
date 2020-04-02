@@ -1,6 +1,7 @@
 umd
 es
 #docs/public/bundle.*
+#docs/win
 
 node_modules
 .vscode
