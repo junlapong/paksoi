@@ -3,9 +3,17 @@ var app = (function () {
 
 function noop() {}
 
-function assign(tar, src) {
-	for (var k in src) tar[k] = src[k];
-	return tar;
+function assign(target) {
+	var k,
+		source,
+		i = 1,
+		len = arguments.length;
+	for (; i < len; i++) {
+		source = arguments[i];
+		for (k in source) target[k] = source[k];
+	}
+
+	return target;
 }
 
 function appendNode(node, target) {
@@ -118,8 +126,29 @@ function destroyDev(detach) {
 	};
 }
 
-function _differs(a, b) {
-	return a != a ? b == b : a !== b || ((a && typeof a === 'object') || typeof a === 'function');
+function differs(a, b) {
+	return a !== b || ((a && typeof a === 'object') || typeof a === 'function');
+}
+
+function dispatchObservers(component, group, changed, newState, oldState) {
+	for (var key in group) {
+		if (!changed[key]) continue;
+
+		var newValue = newState[key];
+		var oldValue = oldState[key];
+
+		var callbacks = group[key];
+		if (!callbacks) continue;
+
+		for (var i = 0; i < callbacks.length; i += 1) {
+			var callback = callbacks[i];
+			if (callback.__calling) continue;
+
+			callback.__calling = true;
+			callback.call(component, newValue, oldValue);
+			callback.__calling = false;
+		}
+	}
 }
 
 function fire(eventName, data) {
@@ -128,19 +157,8 @@ function fire(eventName, data) {
 	if (!handlers) return;
 
 	for (var i = 0; i < handlers.length; i += 1) {
-		var handler = handlers[i];
-
-		if (!handler.__calling) {
-			handler.__calling = true;
-			handler.call(this, data);
-			handler.__calling = false;
-		}
+		handlers[i].call(this, data);
 	}
-}
-
-function getDev(key) {
-	if (key) console.warn("`let x = component.get('x')` is deprecated. Use `let { x } = component.get()` instead");
-	return get.call(this, key);
 }
 
 function get(key) {
@@ -148,6 +166,7 @@ function get(key) {
 }
 
 function init(component, options) {
+	component._observers = { pre: blankObject(), post: blankObject() };
 	component._handlers = blankObject();
 	component._bind = options._bind;
 
@@ -157,21 +176,28 @@ function init(component, options) {
 }
 
 function observe(key, callback, options) {
-	var fn = callback.bind(this);
+	var group = options && options.defer
+		? this._observers.post
+		: this._observers.pre;
+
+	(group[key] || (group[key] = [])).push(callback);
 
 	if (!options || options.init !== false) {
-		fn(this.get()[key], undefined);
+		callback.__calling = true;
+		callback.call(this, this._state[key]);
+		callback.__calling = false;
 	}
 
-	return this.on(options && options.defer ? 'update' : 'state', function(event) {
-		if (event.changed[key]) fn(event.current[key], event.previous && event.previous[key]);
-	});
+	return {
+		cancel: function() {
+			var index = group[key].indexOf(callback);
+			if (~index) group[key].splice(index, 1);
+		}
+	};
 }
 
 function observeDev(key, callback, options) {
-	console.warn("this.observe(key, (newValue, oldValue) => {...}) is deprecated. Use\n\n  // runs before DOM updates\n  this.on('state', ({ changed, current, previous }) => {...});\n\n  // runs after DOM updates\n  this.on('update', ...);\n\n...or add the observe method from the svelte-extras package");
-
-	var c = (key = '' + key).search(/[.[]/);
+	var c = (key = '' + key).search(/[^\w]/);
 	if (c > -1) {
 		var message =
 			'The first argument to component.observe(...) must be the name of a top-level property';
@@ -225,18 +251,18 @@ function _set(newState) {
 		dirty = false;
 
 	for (var key in newState) {
-		if (this._differs(newState[key], oldState[key])) changed[key] = dirty = true;
+		if (differs(newState[key], oldState[key])) changed[key] = dirty = true;
 	}
 	if (!dirty) return;
 
-	this._state = assign(assign({}, oldState), newState);
+	this._state = assign({}, oldState, newState);
 	this._recompute(changed, this._state);
 	if (this._bind) this._bind(changed, this._state);
 
 	if (this._fragment) {
-		this.fire("state", { changed: changed, current: this._state, previous: oldState });
+		dispatchObservers(this, this._observers.pre, changed, this._state, oldState);
 		this._fragment.p(changed, this._state);
-		this.fire("update", { changed: changed, current: this._state, previous: oldState });
+		dispatchObservers(this, this._observers.post, changed, this._state, oldState);
 	}
 }
 
@@ -252,11 +278,11 @@ function setDev(newState) {
 }
 
 function callAll(fns) {
-	while (fns && fns.length) fns.shift()();
+	while (fns && fns.length) fns.pop()();
 }
 
 function _mount(target, anchor) {
-	this._fragment[this._fragment.i ? 'i' : 'm'](target, anchor || null);
+	this._fragment.m(target, anchor);
 }
 
 function _unmount() {
@@ -265,7 +291,7 @@ function _unmount() {
 
 var protoDev = {
 	destroy: destroyDev,
-	get: getDev,
+	get: get,
 	fire: fire,
 	observe: observeDev,
 	on: onDev,
@@ -274,8 +300,7 @@ var protoDev = {
 	_recompute: noop,
 	_set: _set,
 	_mount: _mount,
-	_unmount: _unmount,
-	_differs: _differs
+	_unmount: _unmount
 };
 
 let loading;
@@ -409,7 +434,7 @@ function intersection(node, callback) {
   }
 }
 
-/* node_modules/svelte-google-maps/Map.html generated by Svelte v1.64.1 */
+/* node_modules/svelte-google-maps/Map.html generated by Svelte v1.51.0 */
 function data$1() {
   return {
     defer: false,
@@ -486,7 +511,11 @@ async function ondestroy() {
   console.log('destroy', instance);
 }
 
-function create_main_fragment$1(component, state) {
+function encapsulateStyles$1(node) {
+	setAttribute(node, "svelte-1791593990", "");
+}
+
+function create_main_fragment$1(state, component) {
 	var div, intersection_handler, text, div_1, slot_content_default = component._slotted.default;
 
 	return {
@@ -498,13 +527,13 @@ function create_main_fragment$1(component, state) {
 		},
 
 		l: function claim(nodes) {
-			div = claimElement(nodes, "DIV", { class: true }, false);
+			div = claimElement(nodes, "DIV", {}, false);
 			var div_nodes = children(div);
 
 			div_nodes.forEach(detachNode);
 			text = claimText(nodes, "\n");
 
-			div_1 = claimElement(nodes, "DIV", { class: true }, false);
+			div_1 = claimElement(nodes, "DIV", {}, false);
 			var div_1_nodes = children(div_1);
 
 			div_1_nodes.forEach(detachNode);
@@ -512,19 +541,15 @@ function create_main_fragment$1(component, state) {
 		},
 
 		h: function hydrate() {
+			encapsulateStyles$1(div);
 			setAttribute(div, "svelte-ref-map", "");
 
 			intersection_handler = intersection.call(component, div, function(event) {
 				component.load();
 			});
 
-			if (intersection_handler.teardown) {
-				console.warn("Return 'destroy()' from custom event handlers. Returning 'teardown()' has been deprecated and will be unsupported in Svelte 2");
-			}
-
-			div.className = "svelte-my22wg";
+			encapsulateStyles$1(div_1);
 			setAttribute(div_1, "svelte-ref-children", "");
-			div_1.className = "svelte-my22wg";
 		},
 
 		m: function mount(target, anchor) {
@@ -553,7 +578,7 @@ function create_main_fragment$1(component, state) {
 		},
 
 		d: function destroy$$1() {
-			intersection_handler[intersection_handler.destroy ? 'destroy' : 'teardown']();
+			intersection_handler.teardown();
 			if (component.refs.map === div) component.refs.map = null;
 			if (component.refs.children === div_1) component.refs.children = null;
 		}
@@ -571,40 +596,34 @@ function Map(options) {
 
 	this._slotted = options.slots || {};
 
-	var self = this;
-	var _oncreate = function() {
-		var changed = {  };
-		oncreate.call(self);
-		self.fire("update", { changed: changed, current: self._state });
-	};
+	var _oncreate = oncreate.bind(this);
 
 	if (!options.root) {
-		this._oncreate = [];
-	}
+		this._oncreate = [_oncreate];
+	} else {
+	 	this.root._oncreate.push(_oncreate);
+	 }
 
 	this.slots = {};
 
-	this._fragment = create_main_fragment$1(this, this._state);
-
-	this.root._oncreate.push(_oncreate);
+	this._fragment = create_main_fragment$1(this._state, this);
 
 	if (options.target) {
 		var nodes = children(options.target);
 		options.hydrate ? this._fragment.l(nodes) : this._fragment.c();
 		nodes.forEach(detachNode);
-		this._mount(options.target, options.anchor);
+		this._fragment.m(options.target, options.anchor || null);
 
 		callAll(this._oncreate);
 	}
 }
 
-assign(Map.prototype, protoDev);
-assign(Map.prototype, methods);
+assign(Map.prototype, methods, protoDev);
 
 Map.prototype._checkReadOnly = function _checkReadOnly(newState) {
 };
 
-/* node_modules/svelte-google-maps/Marker.html generated by Svelte v1.64.1 */
+/* node_modules/svelte-google-maps/Marker.html generated by Svelte v1.51.0 */
 function data$2() {
 	return { marker: deferred$1() };
 }
@@ -630,7 +649,7 @@ async function ondestroy$1() {
   marker.setMap(null);
 }
 
-function create_main_fragment$2(component, state) {
+function create_main_fragment$2(state, component) {
 
 	return {
 		c: noop,
@@ -655,26 +674,21 @@ function Marker(options) {
 
 	this._handlers.destroy = [ondestroy$1];
 
-	var self = this;
-	var _oncreate = function() {
-		var changed = {  };
-		oncreate$1.call(self);
-		self.fire("update", { changed: changed, current: self._state });
-	};
+	var _oncreate = oncreate$1.bind(this);
 
 	if (!options.root) {
-		this._oncreate = [];
-	}
+		this._oncreate = [_oncreate];
+	} else {
+	 	this.root._oncreate.push(_oncreate);
+	 }
 
-	this._fragment = create_main_fragment$2(this, this._state);
-
-	this.root._oncreate.push(_oncreate);
+	this._fragment = create_main_fragment$2(this._state, this);
 
 	if (options.target) {
 		var nodes = children(options.target);
 		options.hydrate ? this._fragment.l(nodes) : this._fragment.c();
 		nodes.forEach(detachNode);
-		this._mount(options.target, options.anchor);
+		this._fragment.m(options.target, options.anchor || null);
 
 		callAll(this._oncreate);
 	}
@@ -699,7 +713,7 @@ function deferred$2() {
   return later;
 }
 
-/* Users/junlapong/git-space/spa/paksoi/packages/svelte-google-maps/Polyline.html generated by Svelte v1.64.1 */
+/* Users/junlapong/git-space/paksoi/packages/svelte-google-maps/Polyline.html generated by Svelte v1.51.0 */
 function data$3() {
   return {
     polyline: deferred$2()
@@ -726,7 +740,7 @@ async function ondestroy$2() {
   polyline.setMap(null);
 }
 
-function create_main_fragment$3(component, state) {
+function create_main_fragment$3(state, component) {
 
 	return {
 		c: noop,
@@ -751,26 +765,21 @@ function Polyline(options) {
 
 	this._handlers.destroy = [ondestroy$2];
 
-	var self = this;
-	var _oncreate = function() {
-		var changed = {  };
-		oncreate$2.call(self);
-		self.fire("update", { changed: changed, current: self._state });
-	};
+	var _oncreate = oncreate$2.bind(this);
 
 	if (!options.root) {
-		this._oncreate = [];
-	}
+		this._oncreate = [_oncreate];
+	} else {
+	 	this.root._oncreate.push(_oncreate);
+	 }
 
-	this._fragment = create_main_fragment$3(this, this._state);
-
-	this.root._oncreate.push(_oncreate);
+	this._fragment = create_main_fragment$3(this._state, this);
 
 	if (options.target) {
 		var nodes = children(options.target);
 		options.hydrate ? this._fragment.l(nodes) : this._fragment.c();
 		nodes.forEach(detachNode);
-		this._mount(options.target, options.anchor);
+		this._fragment.m(options.target, options.anchor || null);
 
 		callAll(this._oncreate);
 	}
@@ -781,7 +790,7 @@ assign(Polyline.prototype, protoDev);
 Polyline.prototype._checkReadOnly = function _checkReadOnly(newState) {
 };
 
-/* Users/junlapong/git-space/spa/paksoi/packages/svelte-google-maps/Info.html generated by Svelte v1.64.1 */
+/* Users/junlapong/git-space/paksoi/packages/svelte-google-maps/Info.html generated by Svelte v1.51.0 */
 function data$4() {
   return {
     info: deferred$2()
@@ -818,7 +827,7 @@ async function ondestroy$3() {
   info.close();
 }
 
-function create_main_fragment$4(component, state) {
+function create_main_fragment$4(state, component) {
 	var div, div_1, slot_content_default = component._slotted.default;
 
 	return {
@@ -876,28 +885,23 @@ function Info(options) {
 
 	this._slotted = options.slots || {};
 
-	var self = this;
-	var _oncreate = function() {
-		var changed = {  };
-		oncreate$3.call(self);
-		self.fire("update", { changed: changed, current: self._state });
-	};
+	var _oncreate = oncreate$3.bind(this);
 
 	if (!options.root) {
-		this._oncreate = [];
-	}
+		this._oncreate = [_oncreate];
+	} else {
+	 	this.root._oncreate.push(_oncreate);
+	 }
 
 	this.slots = {};
 
-	this._fragment = create_main_fragment$4(this, this._state);
-
-	this.root._oncreate.push(_oncreate);
+	this._fragment = create_main_fragment$4(this._state, this);
 
 	if (options.target) {
 		var nodes = children(options.target);
 		options.hydrate ? this._fragment.l(nodes) : this._fragment.c();
 		nodes.forEach(detachNode);
-		this._mount(options.target, options.anchor);
+		this._fragment.m(options.target, options.anchor || null);
 
 		callAll(this._oncreate);
 	}
@@ -912,7 +916,7 @@ Info.prototype._checkReadOnly = function _checkReadOnly(newState) {
 const center = { lat: 13.515955, lng: 99.950190 };
 
 const stations = [
-  { position: { lat: 13.514179, lng: 99.94456 }, title: 'ส้มตำบ้านสวน' },
+  { position: { lat: 13.51403, lng: 99.944474 }, title: 'ส้มตำบ้านสวน' },
   { position: { lat: 13.521511, lng: 99.965059 }, title: 'ส้มตำย่าขา' },
   { position: { lat: 13.516737, lng: 99.952000 }, title: 'ร้านตาเข อาหารตามสั่ง' },
   { position: { lat: 13.530860, lng: 99.946921 }, title: 'Coco\'s Coffee' },
@@ -956,7 +960,7 @@ const route = [
 */
 ];
 
-/* src/App.html generated by Svelte v1.64.1 */
+/* src/App.html generated by Svelte v1.51.0 */
 const API_KEY = "AIzaSyD7oUvzDD-eXoWc91eECCa0eMHmHVZb1Cg";
 const icon = {
   path: 'M 0,0 m -2,0 a 2,2 0 2,0 4,0 a 2,2 0 2,0 -4,0',
@@ -979,33 +983,32 @@ function data() {
   };
 }
 
-function create_main_fragment(component, state) {
+function encapsulateStyles(node) {
+	setAttribute(node, "svelte-1042066063", "");
+}
+
+function create_main_fragment(state, component) {
 	var div, div_1, text, each_anchor, text_1, text_2, if_block_anchor, text_3, map_updating = {}, text_6, div_2, div_3, text_7, text_8_value = state.center.lat.toFixed(6), text_8, text_9, span, text_10, text_11, div_4, text_12, text_13_value = state.center.lng.toFixed(6), text_13, text_14, span_1, text_15, text_16, div_5, label, text_17, text_18, input, text_19, text_20;
 
-	var each_value = state.stations;
+	var stations_1 = state.stations;
 
 	var each_blocks = [];
 
-	for (var i = 0; i < each_value.length; i += 1) {
-		each_blocks[i] = create_each_block(component, assign(assign({}, state), {
-			each_value: each_value,
-			station: each_value[i],
-			station_index: i
-		}));
+	for (var i = 0; i < stations_1.length; i += 1) {
+		each_blocks[i] = create_each_block(state, stations_1, stations_1[i], i, component);
 	}
 
-	var polyline_initial_data = {
-	 	map: state.map,
-	 	path: state.route,
-	 	color: "#005da5",
-	 	weight: 4
-	 };
 	var polyline = new Polyline({
 		root: component.root,
-		data: polyline_initial_data
+		data: {
+			map: state.map,
+			path: state.route,
+			color: "#005da5",
+			weight: 4
+		}
 	});
 
-	var if_block = (state.selected) && create_if_block(component, state);
+	var if_block = (state.selected) && create_if_block(state, component);
 
 	var map_initial_data = { map: state.map, defer: true };
 	if ('center' in state) {
@@ -1029,13 +1032,25 @@ function create_main_fragment(component, state) {
 			if (!map_updating.zoom && changed.zoom) {
 				newState.zoom = childState.zoom;
 			}
+			map_updating = assign({}, changed);
 			component._set(newState);
 			map_updating = {};
 		}
 	});
 
 	component.root._beforecreate.push(function() {
-		map._bind({ center: 1, zoom: 1 }, map.get());
+		var state = component.get(), childState = map.get(), newState = {};
+		if (!childState) return;
+		if (!map_updating.center) {
+			newState.center = childState.center;
+		}
+
+		if (!map_updating.zoom) {
+			newState.zoom = childState.zoom;
+		}
+		map_updating = { center: true, zoom: true };
+		component._set(newState);
+		map_updating = {};
 	});
 
 	function input_input_handler() {
@@ -1170,8 +1185,9 @@ function create_main_fragment(component, state) {
 		},
 
 		h: function hydrate() {
+			encapsulateStyles(div_1);
 			setAttribute(div_1, "svelte-ref-container", "");
-			div_1.className = "w-full border-b border-grey border-solid svelte-ln2rh";
+			div_1.className = "w-full border-b border-grey border-solid";
 			div.className = "sm:flex border border-grey border-solid";
 			div_3.className = "sm:inline-block";
 			span.className = "invisible sm:visible";
@@ -1180,7 +1196,7 @@ function create_main_fragment(component, state) {
 			label.htmlFor = "zoom";
 			addListener(input, "input", input_input_handler);
 			addListener(input, "change", input_change_handler);
-			setAttribute(input, "type", "range");
+			input.type = "range";
 			input.min = "1";
 			input.max = "18";
 			input.className = "align-text-top";
@@ -1235,20 +1251,14 @@ function create_main_fragment(component, state) {
 		},
 
 		p: function update(changed, state) {
-			var each_value = state.stations;
+			var stations_1 = state.stations;
 
 			if (changed.map || changed.stations || changed.icon) {
-				for (var i = 0; i < each_value.length; i += 1) {
-					var each_context = assign(assign({}, state), {
-						each_value: each_value,
-						station: each_value[i],
-						station_index: i
-					});
-
+				for (var i = 0; i < stations_1.length; i += 1) {
 					if (each_blocks[i]) {
-						each_blocks[i].p(changed, each_context);
+						each_blocks[i].p(changed, state, stations_1, stations_1[i], i);
 					} else {
-						each_blocks[i] = create_each_block(component, each_context);
+						each_blocks[i] = create_each_block(state, stations_1, stations_1[i], i, component);
 						each_blocks[i].c();
 						each_blocks[i].m(each_anchor.parentNode, each_anchor);
 					}
@@ -1258,7 +1268,7 @@ function create_main_fragment(component, state) {
 					each_blocks[i].u();
 					each_blocks[i].d();
 				}
-				each_blocks.length = each_value.length;
+				each_blocks.length = stations_1.length;
 			}
 
 			var polyline_changes = {};
@@ -1270,7 +1280,7 @@ function create_main_fragment(component, state) {
 				if (if_block) {
 					if_block.p(changed, state);
 				} else {
-					if_block = create_if_block(component, state);
+					if_block = create_if_block(state, component);
 					if_block.c();
 					if_block.m(if_block_anchor.parentNode, if_block_anchor);
 				}
@@ -1334,23 +1344,28 @@ function create_main_fragment(component, state) {
 }
 
 // (9:6) {{#each stations as station}}
-function create_each_block(component, state) {
-	var station = state.station, each_value = state.each_value, station_index = state.station_index;
+function create_each_block(state, stations_1, station, station_index, component) {
 
-	var marker_initial_data = {
-	 	map: state.map,
-	 	position: station.position,
-	 	title: station.title,
-	 	icon: state.icon
-	 };
 	var marker = new Marker({
 		root: component.root,
-		data: marker_initial_data
+		data: {
+			map: state.map,
+			position: station.position,
+			title: station.title,
+			icon: state.icon
+		}
 	});
 
 	marker.on("click", function(event) {
+		var stations_1 = marker_context.stations_1, station_index = marker_context.station_index, station = stations_1[station_index];
+
 		component.set({ selected: station });
 	});
+
+	var marker_context = {
+		stations_1: stations_1,
+		station_index: station_index
+	};
 
 	return {
 		c: function create() {
@@ -1365,16 +1380,16 @@ function create_each_block(component, state) {
 			marker._mount(target, anchor);
 		},
 
-		p: function update(changed, state) {
-			station = state.station;
-			each_value = state.each_value;
-			station_index = state.station_index;
+		p: function update(changed, state, stations_1, station, station_index) {
 			var marker_changes = {};
 			if (changed.map) marker_changes.map = state.map;
 			if (changed.stations) marker_changes.position = station.position;
 			if (changed.stations) marker_changes.title = station.title;
 			if (changed.icon) marker_changes.icon = state.icon;
 			marker._set(marker_changes);
+
+			marker_context.stations_1 = stations_1;
+			marker_context.station_index = station_index;
 		},
 
 		u: function unmount() {
@@ -1388,14 +1403,13 @@ function create_each_block(component, state) {
 }
 
 // (15:6) {{#if selected}}
-function create_if_block(component, state) {
+function create_if_block(state, component) {
 	var text, div, text_1_value = state.selected.title, text_1, text_2;
 
-	var info_initial_data = { map: state.map, position: state.selected.position };
 	var info = new Info({
 		root: component.root,
 		slots: { default: createFragment() },
-		data: info_initial_data
+		data: { map: state.map, position: state.selected.position }
 	});
 
 	info.on("close", function(event) {
@@ -1478,13 +1492,13 @@ function App(options) {
 		this._aftercreate = [];
 	}
 
-	this._fragment = create_main_fragment(this, this._state);
+	this._fragment = create_main_fragment(this._state, this);
 
 	if (options.target) {
 		var nodes = children(options.target);
 		options.hydrate ? this._fragment.l(nodes) : this._fragment.c();
 		nodes.forEach(detachNode);
-		this._mount(options.target, options.anchor);
+		this._fragment.m(options.target, options.anchor || null);
 
 		this._lock = true;
 		callAll(this._beforecreate);

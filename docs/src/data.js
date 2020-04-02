@@ -3,7 +3,7 @@
 export const center = { lat: 13.515955, lng: 99.950190 };
 
 export const stations = [
-  { position: { lat: 13.514179, lng: 99.94456 }, title: 'ส้มตำบ้านสวน' },
+  { position: { lat: 13.51403, lng: 99.944474 }, title: 'ส้มตำบ้านสวน' },
   { position: { lat: 13.521511, lng: 99.965059 }, title: 'ส้มตำย่าขา' },
   { position: { lat: 13.516737, lng: 99.952000 }, title: 'ร้านตาเข อาหารตามสั่ง' },
   { position: { lat: 13.530860, lng: 99.946921 }, title: 'Coco\'s Coffee' },
