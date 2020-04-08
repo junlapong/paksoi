@@ -23,7 +23,7 @@ export default {
         production ? 'production' : 'development'
       ),
       'process.env.API_KEY': JSON.stringify(
-        production ? 'AIzaSyAiBthVwmMBNM5PwhmzUOveXPMGD6nCymo' : 'AIzaSyD7oUvzDD-eXoWc91eECCa0eMHmHVZb1Cg'
+        production ? 'AIzaSyDJbAdwCP0V_hhc5f27qoTmISBiUio2Aqc' : 'AIzaSyDJbAdwCP0V_hhc5f27qoTmISBiUio2Aqc'
       )
     }),
 
